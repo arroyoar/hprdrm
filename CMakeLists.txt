@@ -16,7 +16,10 @@ find_package(miniaudio REQUIRED)
 find_package(kissfft REQUIRED)
 
 # Setup executable
-add_executable(visualizer src/main.cpp src/Window.cpp src/AudioEngine.cpp)
+add_executable(visualizer src/main.cpp src/Window.cpp src/AudioEngine.cpp src/Shader.cpp)
+
+# Copy assets to build directory
+file(COPY assets DESTINATION ${CMAKE_BINARY_DIR})
 
 # Link Conan targets
 target_link_libraries(visualizer PRIVATE
