@@ -6,8 +6,8 @@
 #include "Camera.h"
 #include <glm/gtc/matrix_transform.hpp>
 
-// Camera setup
-Camera camera(glm::vec3(0.0f, 15.0f, 30.0f));
+// Camera setup - Pull the camera back and up to see the full 50x50 grid
+Camera camera(glm::vec3(0.0f, 60.0f, 90.0f));
 float lastX = 1280.0f / 2.0;
 float lastY = 720.0f / 2.0;
 bool firstMouse = true;
@@ -80,7 +80,11 @@ int main() {
     Shader shader("assets/shaders/visualizer.vert", "assets/shaders/visualizer.frag");
 
     AudioEngine audio;
-    if (audio.initialize("music.mp3")) {
+    bool audioLoaded = audio.initialize("music.mp3");
+    if (!audioLoaded) audioLoaded = audio.initialize("../../music.mp3");
+    if (!audioLoaded) audioLoaded = audio.initialize("../music.mp3");
+    
+    if (audioLoaded) {
         audio.play();
     } else {
         std::cerr << "Warning: Could not load music.mp3. Visualizer will run without audio." << std::endl;

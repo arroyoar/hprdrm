@@ -14,5 +14,8 @@ class VisualizerConan(ConanFile):
         self.requires("miniaudio/0.11.21")
         self.requires("kissfft/131.1.0")
 
+    def build_requirements(self):
+        self.test_requires("gtest/1.14.0")
+
     def layout(self):
         cmake_layout(self)

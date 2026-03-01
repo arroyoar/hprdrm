@@ -48,3 +48,9 @@ def run(c, build_type="Release"):
         return
         
     c.run(exe_path)
+
+@task
+def test(c, build_type="Release"):
+    """Runs the C++ unit tests using CTest."""
+    build_preset = "conan-release" if build_type == "Release" else f"conan-{build_type.lower()}"
+    c.run(f"ctest --preset {build_preset} --output-on-failure")

@@ -14,6 +14,7 @@ find_package(glad REQUIRED)
 find_package(glm REQUIRED)
 find_package(miniaudio REQUIRED)
 find_package(kissfft REQUIRED)
+find_package(GTest REQUIRED)
 
 # Setup executable
 add_executable(visualizer src/main.cpp src/Window.cpp src/AudioEngine.cpp src/Shader.cpp)
@@ -29,3 +30,20 @@ target_link_libraries(visualizer PRIVATE
     miniaudio::miniaudio
     kissfft::kissfft
 )
+
+# Setup Testing
+enable_testing()
+add_executable(visualizer_tests tests/test_camera.cpp)
+
+# We link GLM to the tests because Camera.h uses it. 
+# We link GTest::gtest_main to automatically provide a main() function for our tests.
+target_link_libraries(visualizer_tests PRIVATE
+    GTest::gtest_main
+    glm::glm
+    glad::glad
+    glfw
+)
+target_include_directories(visualizer_tests PRIVATE src)
+
+include(GoogleTest)
+gtest_discover_tests(visualizer_tests)

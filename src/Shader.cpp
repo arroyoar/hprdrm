@@ -4,31 +4,34 @@
 #include <iostream>
 #include <glm/gtc/type_ptr.hpp>
 
-Shader::Shader(const char* vertexPath, const char* fragmentPath) {
-    // 1. Retrieve the vertex/fragment source code from filePath
-    std::string vertexCode;
-    std::string fragmentCode;
-    std::ifstream vShaderFile;
-    std::ifstream fShaderFile;
-
-    vShaderFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-    fShaderFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-    try {
-        vShaderFile.open(vertexPath);
-        fShaderFile.open(fragmentPath);
-        std::stringstream vShaderStream, fShaderStream;
-        
-        vShaderStream << vShaderFile.rdbuf();
-        fShaderStream << fShaderFile.rdbuf();
-        
-        vShaderFile.close();
-        fShaderFile.close();
-        
-        vertexCode = vShaderStream.str();
-        fragmentCode = fShaderStream.str();
+std::string loadShaderSource(const char* filePath) {
+    std::ifstream file(filePath);
+    if (!file.is_open()) {
+        // Fallback for when running directly from build/Release/
+        std::string fallbackPath = std::string("../../") + filePath;
+        file.open(fallbackPath);
+        if (!file.is_open()) {
+            // Fallback for when running from build/
+            fallbackPath = std::string("../") + filePath;
+            file.open(fallbackPath);
+            if (!file.is_open()) {
+                std::cerr << "ERROR::SHADER::FILE_NOT_SUCCESFULLY_READ: " << filePath << std::endl;
+                return "";
+            }
+        }
     }
-    catch (std::ifstream::failure& e) {
-        std::cout << "ERROR::SHADER::FILE_NOT_SUCCESFULLY_READ" << std::endl;
+    std::stringstream stream;
+    stream << file.rdbuf();
+    return stream.str();
+}
+
+Shader::Shader(const char* vertexPath, const char* fragmentPath) {
+    std::string vertexCode = loadShaderSource(vertexPath);
+    std::string fragmentCode = loadShaderSource(fragmentPath);
+
+    if (vertexCode.empty() || fragmentCode.empty()) {
+        std::cerr << "ERROR::SHADER::INIT_FAILED" << std::endl;
+        return;
     }
 
     const char* vShaderCode = vertexCode.c_str();
