@@ -12,7 +12,7 @@ find_package(miniaudio REQUIRED)
 find_package(kissfft REQUIRED)
 
 # Setup executable
-add_executable(visualizer src/main.cpp)
+add_executable(visualizer src/main.cpp src/Window.cpp)
 
 # Link Conan targets
 target_link_libraries(visualizer PRIVATE
