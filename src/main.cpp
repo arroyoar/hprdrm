@@ -1,5 +1,6 @@
 #include <iostream>
 #include <vector>
+#include <filesystem>
 #include "Window.h"
 #include "AudioEngine.h"
 #include "Shader.h"
@@ -17,6 +18,8 @@ float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
 void processInput(GLFWwindow *window, AudioEngine& audio) {
+// ... omitting existing processInput content to match the old string start
+
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
@@ -123,7 +126,7 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     if (camera.Zoom > 45.0f) camera.Zoom = 45.0f;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
     std::cout << "Starting 3D Music Visualizer..." << std::endl;
 
     Window window(1280, 720, "3D Music Visualizer");
@@ -141,21 +144,43 @@ int main() {
     Shader shader("assets/shaders/visualizer.vert", "assets/shaders/visualizer.frag");
 
     AudioEngine audio;
+    bool audioLoaded = false;
     
-    // First try to load a directory called "music"
-    bool audioLoaded = audio.loadDirectory("music");
-    if (!audioLoaded) audioLoaded = audio.loadDirectory("../music");
-    if (!audioLoaded) audioLoaded = audio.loadDirectory("../../music");
-    
-    // Fallback to the single music.mp3 file
-    if (!audioLoaded) audioLoaded = audio.initialize("music.mp3");
-    if (!audioLoaded) audioLoaded = audio.initialize("../../music.mp3");
-    if (!audioLoaded) audioLoaded = audio.initialize("../music.mp3");
+    // 1. Check if user provided a custom directory or file path via command line
+    if (argc > 1) {
+        std::string customPath = argv[1];
+        std::cout << "Attempting to load music from: " << customPath << std::endl;
+        
+        if (std::filesystem::exists(customPath)) {
+            if (std::filesystem::is_directory(customPath)) {
+                audioLoaded = audio.loadDirectory(customPath);
+            } else {
+                audioLoaded = audio.initialize(customPath);
+            }
+        }
+        
+        if (!audioLoaded) {
+            std::cerr << "Failed to load audio from custom path: " << customPath << ". Falling back to defaults." << std::endl;
+        }
+    }
+
+    // 2. Fallback defaults if no custom path was provided or it failed
+    if (!audioLoaded) {
+        // Try to load a directory called "music"
+        audioLoaded = audio.loadDirectory("music");
+        if (!audioLoaded) audioLoaded = audio.loadDirectory("../music");
+        if (!audioLoaded) audioLoaded = audio.loadDirectory("../../music");
+        
+        // Fallback to the single music.mp3 file
+        if (!audioLoaded) audioLoaded = audio.initialize("music.mp3");
+        if (!audioLoaded) audioLoaded = audio.initialize("../../music.mp3");
+        if (!audioLoaded) audioLoaded = audio.initialize("../music.mp3");
+    }
     
     if (audioLoaded) {
         audio.play();
     } else {
-        std::cerr << "Warning: Could not load music directory or music.mp3. Visualizer will run without audio." << std::endl;
+        std::cerr << "Warning: Could not load any music. Visualizer will run without audio." << std::endl;
     }
 
     // Cube vertices (36 vertices for 12 triangles)

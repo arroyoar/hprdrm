@@ -37,7 +37,7 @@ def build(c, build_type="Release"):
     print("Build complete.")
 
 @task
-def run(c, build_type="Release"):
+def run(c, build_type="Release", path=None):
     """Runs the compiled visualizer executable."""
     exe_path = os.path.join("build", build_type, "visualizer.exe")
     if platform.system() != "Windows":
@@ -47,7 +47,11 @@ def run(c, build_type="Release"):
         print(f"Error: Executable not found at {exe_path}. Did you run 'invoke build'?")
         return
         
-    c.run(exe_path)
+    cmd = exe_path
+    if path:
+        cmd += f' "{path}"'
+        
+    c.run(cmd)
 
 @task
 def test(c, build_type="Release"):
