@@ -33,7 +33,7 @@ target_link_libraries(visualizer PRIVATE
 
 # Setup Testing
 enable_testing()
-add_executable(visualizer_tests tests/test_camera.cpp)
+add_executable(visualizer_tests tests/test_camera.cpp tests/test_audio.cpp src/AudioEngine.cpp)
 
 # We link GLM to the tests because Camera.h uses it. 
 # We link GTest::gtest_main to automatically provide a main() function for our tests.
@@ -42,6 +42,8 @@ target_link_libraries(visualizer_tests PRIVATE
     glm::glm
     glad::glad
     glfw
+    miniaudio::miniaudio
+    kissfft::kissfft
 )
 target_include_directories(visualizer_tests PRIVATE src)
 

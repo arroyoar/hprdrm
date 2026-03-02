@@ -33,7 +33,13 @@ This project is a 3D music visualizer written in C++, using OpenGL, GLFW, GLM, m
     *   Interpolate block RGB colors based on the intensity of the music.
 *   **Smoothing:** Implement time-based smoothing (interpolation/lerping) so the visualizer movements are fluid rather than jittery.
 
-## Phase 6: Advanced Architecture (Preparation for Phase 2 Features)
+## Phase 6: Features & Polish
+*   **Audio Controls:** Add play, pause, fast forward, skip song, and display the current song name.
+*   **Playlist Support:** Add the ability to read and play from a directory of music files.
+*   **Cinematic Camera:** Add pre-determined automated camera movements (sweeps, tracking, orbiting).
+*   **Visual Refinement:** Modify the max-duration flash tracking so the inner sub-bass/bass frequencies aren't constantly flashing white during heavy bass sections.
+
+## Phase 7: Advanced Architecture (Preparation for Future Features)
 *   To support advanced features (Depth of Field, Bloom/Sparks, Distortion, Video Texturing), design the renderer with a **Framebuffer Object (FBO)** architecture from the start.
 *   Render the 3D grid to a texture instead of directly to the screen.
 *   Ensure the geometric rendering system can accept texture coordinates (UVs) for future image/video mapping.

@@ -5,11 +5,16 @@
 #include <algorithm>
 
 AudioEngine::AudioEngine()
-    : m_initialized(false), m_bass(0.0f), m_mid(0.0f), m_treble(0.0f) {
+    : m_initialized(false), 
+      m_subBass(0.0f), m_bass(0.0f), m_lowMid(0.0f), m_mid(0.0f), m_highMid(0.0f), m_presence(0.0f), m_treble(0.0f),
+      m_subBassEnergy(0.0f), m_bassEnergy(0.0f), m_lowMidEnergy(0.0f), m_midEnergy(0.0f), m_highMidEnergy(0.0f), m_presenceEnergy(0.0f), m_trebleEnergy(0.0f),
+      m_subBassMaxDuration(0.0f), m_bassMaxDuration(0.0f), m_lowMidMaxDuration(0.0f), m_midMaxDuration(0.0f), m_highMidMaxDuration(0.0f), m_presenceMaxDuration(0.0f), m_trebleMaxDuration(0.0f) {
     m_fftConfig = kiss_fftr_alloc(FFT_SIZE, 0, nullptr, nullptr);
     m_audioBuffer.resize(FFT_SIZE, 0.0f);
     m_fftOutput.resize(FFT_SIZE / 2 + 1);
 }
+
+// ... skipping unchanged destructor and init code ...
 
 AudioEngine::~AudioEngine() {
     if (m_initialized) {
@@ -105,33 +110,110 @@ void AudioEngine::update() {
     kiss_fftr(m_fftConfig, currentBuffer.data(), m_fftOutput.data());
 
     // Calculate magnitudes and group into bands
-    float bassSum = 0.0f, midSum = 0.0f, trebleSum = 0.0f;
-    int bassCount = 0, midCount = 0, trebleCount = 0;
+    float subBassSum = 0.0f, bassSum = 0.0f, lowMidSum = 0.0f, midSum = 0.0f, highMidSum = 0.0f, presenceSum = 0.0f, trebleSum = 0.0f;
+    int subBassCount = 0, bassCount = 0, lowMidCount = 0, midCount = 0, highMidCount = 0, presenceCount = 0, trebleCount = 0;
 
     int numBins = FFT_SIZE / 2;
+    // We apply a noise threshold so low-volume noise doesn't trigger massive spikes
+    // Increased significantly to kill the constant red/orange 'hum' floor
+    const float noiseThreshold = 3.0f; 
+
     for (int i = 1; i < numBins; ++i) { // Skip DC offset (i=0)
         float magnitude = std::sqrt(m_fftOutput[i].r * m_fftOutput[i].r + m_fftOutput[i].i * m_fftOutput[i].i);
         
-        // Very basic band distribution based on bin index
-        if (i < 10) { // Bass (low frequency bins)
+        // Subtract noise floor and clamp to 0
+        magnitude = std::max(0.0f, magnitude - noiseThreshold);
+
+        // 7-Band distribution based on bin index
+        if (i < 4) { // Sub-Bass
+            subBassSum += magnitude;
+            subBassCount++;
+        } else if (i < 12) { // Bass
             bassSum += magnitude;
             bassCount++;
-        } else if (i < 100) { // Mids
+        } else if (i < 24) { // Low Mids
+            lowMidSum += magnitude;
+            lowMidCount++;
+        } else if (i < 48) { // Mids
             midSum += magnitude;
             midCount++;
+        } else if (i < 96) { // High Mids
+            highMidSum += magnitude;
+            highMidCount++;
+        } else if (i < 150) { // Presence
+            presenceSum += magnitude;
+            presenceCount++;
         } else { // Treble
             trebleSum += magnitude;
             trebleCount++;
         }
     }
 
-    // A simple lerp for smooth visual transitions
-    auto smooth = [](float current, float target, float dt) {
-        return current + (target - current) * dt;
+    // Asymmetric smoothing: Fast attack (rises quickly to the beat) and slow release (falls slowly)
+    auto smooth = [](float current, float target, float attackDt, float releaseDt) {
+        if (target > current) {
+            return current + (target - current) * attackDt;
+        } else {
+            return current + (target - current) * releaseDt;
+        }
     };
     
-    float dt = 0.1f; // Lerp factor
-    m_bass = smooth(m_bass, (bassCount > 0) ? (bassSum / bassCount) : 0.0f, dt);
-    m_mid = smooth(m_mid, (midCount > 0) ? (midSum / midCount) : 0.0f, dt);
-    m_treble = smooth(m_treble, (trebleCount > 0) ? (trebleSum / trebleCount) : 0.0f, dt);
+    // The "base" peak value moves up instantly when the beat hits, but falls somewhat quickly
+    float attackDt = 0.5f;   
+    float releaseDt = 0.05f; 
+    
+    float targetSubBass = (subBassCount > 0) ? (subBassSum / subBassCount) : 0.0f;
+    float targetBass = (bassCount > 0) ? (bassSum / bassCount) : 0.0f;
+    float targetLowMid = (lowMidCount > 0) ? (lowMidSum / lowMidCount) : 0.0f;
+    float targetMid = (midCount > 0) ? (midSum / midCount) : 0.0f;
+    float targetHighMid = (highMidCount > 0) ? (highMidSum / highMidCount) : 0.0f;
+    float targetPresence = (presenceCount > 0) ? (presenceSum / presenceCount) : 0.0f;
+    float targetTreble = (trebleCount > 0) ? (trebleSum / trebleCount) : 0.0f;
+
+    m_subBass = smooth(m_subBass, targetSubBass, attackDt, releaseDt);
+    m_bass = smooth(m_bass, targetBass, attackDt, releaseDt);
+    m_lowMid = smooth(m_lowMid, targetLowMid, attackDt, releaseDt);
+    m_mid = smooth(m_mid, targetMid, attackDt, releaseDt);
+    m_highMid = smooth(m_highMid, targetHighMid, attackDt, releaseDt);
+    m_presence = smooth(m_presence, targetPresence, attackDt, releaseDt);
+    m_treble = smooth(m_treble, targetTreble, attackDt, releaseDt);
+
+    // Energy Integrator: 
+    // We add the current smoothed value to the "Energy" pool.
+    // If a note is sustained, it piles up and grows taller over time.
+    // We also constantly bleed off energy (decay) so it falls back down slowly.
+    
+    auto integrateEnergy = [](float energy, float input, float maxEnergy, float& maxDurationTracker) {
+        // Only build up energy if the input is significantly above a tiny threshold
+        if (input > 0.1f) {
+            energy += input * 0.08f; // Greatly reduced from 0.15f to prevent instant maxing
+        }
+        
+        // Decay/bleed energy back down. 
+        // We subtract a constant amount AND multiply to ensure it reaches zero quickly when quiet
+        energy = (energy * 0.90f) - 0.1f; // Reduced multiplier and added linear falloff
+        
+        // Strict clamp
+        energy = std::max(0.0f, std::min(energy, maxEnergy)); 
+        
+        // Track how long we are pinned at the ceiling
+        if (energy >= maxEnergy - 0.5f) {
+            maxDurationTracker += 1.0f; // Accumulate frames spent at max
+        } else {
+            maxDurationTracker = std::max(0.0f, maxDurationTracker - 2.0f); // Bleed off duration rapidly when we fall
+        }
+
+        return energy;
+    };
+
+    // The maximum "Energy" limit before we forcibly cap it to avoid overflow
+    float maxE = 15.0f; // Lowered from 20.0f
+    
+    m_subBassEnergy = integrateEnergy(m_subBassEnergy, m_subBass, maxE, m_subBassMaxDuration);
+    m_bassEnergy = integrateEnergy(m_bassEnergy, m_bass, maxE, m_bassMaxDuration);
+    m_lowMidEnergy = integrateEnergy(m_lowMidEnergy, m_lowMid, maxE, m_lowMidMaxDuration);
+    m_midEnergy = integrateEnergy(m_midEnergy, m_mid, maxE, m_midMaxDuration);
+    m_highMidEnergy = integrateEnergy(m_highMidEnergy, m_highMid, maxE, m_highMidMaxDuration);
+    m_presenceEnergy = integrateEnergy(m_presenceEnergy, m_presence, maxE, m_presenceMaxDuration);
+    m_trebleEnergy = integrateEnergy(m_trebleEnergy, m_treble, maxE, m_trebleMaxDuration);
 }

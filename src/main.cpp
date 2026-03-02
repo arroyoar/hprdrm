@@ -102,11 +102,21 @@ int main() {
 
     // Generate grid offsets
     std::vector<glm::vec3> translations;
-    int gridSize = 50; // 50x50 = 2500 cubes
-    float offset = 1.2f;
+    int gridSize = 100; // Increased to 100x100 = 10,000 cubes for a much wider field
+    float offset = 2.5f; // Increased spacing between cubes
     for (int z = -gridSize / 2; z < gridSize / 2; z++) {
         for (int x = -gridSize / 2; x < gridSize / 2; x++) {
-            translations.push_back(glm::vec3(x * offset, 0.0f, z * offset));
+            // Stagger every other row on the X axis so we can see "through" the grid better
+            float rowOffset = (z % 2 == 0) ? 0.0f : (offset / 2.0f);
+            
+            float xPos = x * offset + rowOffset;
+            float zPos = z * (offset * 0.866f); // Pull rows closer for hexagonal pattern
+            
+            // Add a slight curve-down effect so outer layers sit lower, exposing the center
+            float distFromCenter = std::sqrt(xPos*xPos + zPos*zPos);
+            float yPos = distFromCenter * -0.1f; 
+
+            translations.push_back(glm::vec3(xPos, yPos, zPos));
         }
     }
 
@@ -149,9 +159,21 @@ int main() {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         shader.use();
+        shader.setFloat("uSubBass", audio.getSubBass());
         shader.setFloat("uBass", audio.getBass());
+        shader.setFloat("uLowMid", audio.getLowMid());
         shader.setFloat("uMid", audio.getMid());
+        shader.setFloat("uHighMid", audio.getHighMid());
+        shader.setFloat("uPresence", audio.getPresence());
         shader.setFloat("uTreble", audio.getTreble());
+
+        shader.setFloat("uSubBassMaxDur", audio.getSubBassMaxDuration());
+        shader.setFloat("uBassMaxDur", audio.getBassMaxDuration());
+        shader.setFloat("uLowMidMaxDur", audio.getLowMidMaxDuration());
+        shader.setFloat("uMidMaxDur", audio.getMidMaxDuration());
+        shader.setFloat("uHighMidMaxDur", audio.getHighMidMaxDuration());
+        shader.setFloat("uPresenceMaxDur", audio.getPresenceMaxDuration());
+        shader.setFloat("uTrebleMaxDur", audio.getTrebleMaxDuration());
 
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)window.getWidth() / (float)window.getHeight(), 0.1f, 1000.0f);
         glm::mat4 view = camera.GetViewMatrix();
@@ -159,7 +181,7 @@ int main() {
         shader.setMat4("view", view);
 
         glBindVertexArray(VAO);
-        // Draw 2500 cubes with one call
+        // Draw 10000 cubes with one call
         glDrawArraysInstanced(GL_TRIANGLES, 0, 36, translations.size());
         glBindVertexArray(0);
 
