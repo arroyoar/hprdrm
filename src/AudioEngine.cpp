@@ -3,9 +3,12 @@
 #include <iostream>
 #include <cmath>
 #include <algorithm>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 AudioEngine::AudioEngine()
-    : m_initialized(false), 
+    : m_initialized(false), m_isPaused(false), m_currentTrackIndex(-1),
       m_subBass(0.0f), m_bass(0.0f), m_lowMid(0.0f), m_mid(0.0f), m_highMid(0.0f), m_presence(0.0f), m_treble(0.0f),
       m_subBassEnergy(0.0f), m_bassEnergy(0.0f), m_lowMidEnergy(0.0f), m_midEnergy(0.0f), m_highMidEnergy(0.0f), m_presenceEnergy(0.0f), m_trebleEnergy(0.0f),
       m_subBassMaxDuration(0.0f), m_bassMaxDuration(0.0f), m_lowMidMaxDuration(0.0f), m_midMaxDuration(0.0f), m_highMidMaxDuration(0.0f), m_presenceMaxDuration(0.0f), m_trebleMaxDuration(0.0f) {
@@ -25,9 +28,44 @@ AudioEngine::~AudioEngine() {
 }
 
 bool AudioEngine::initialize(const std::string& filePath) {
-    ma_result result;
+    m_playlist.clear();
+    m_playlist.push_back(filePath);
+    m_currentTrackIndex = 0;
+    return loadTrack(filePath);
+}
 
-    result = ma_decoder_init_file(filePath.c_str(), nullptr, &m_decoder);
+bool AudioEngine::loadDirectory(const std::string& dirPath) {
+    m_playlist.clear();
+    m_currentTrackIndex = -1;
+    
+    if (fs::exists(dirPath) && fs::is_directory(dirPath)) {
+        for (const auto& entry : fs::directory_iterator(dirPath)) {
+            if (entry.is_regular_file()) {
+                std::string ext = entry.path().extension().string();
+                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                if (ext == ".mp3" || ext == ".wav" || ext == ".flac") {
+                    m_playlist.push_back(entry.path().string());
+                }
+            }
+        }
+    }
+    
+    if (!m_playlist.empty()) {
+        std::sort(m_playlist.begin(), m_playlist.end());
+        m_currentTrackIndex = 0;
+        return loadTrack(m_playlist[0]);
+    }
+    return false;
+}
+
+bool AudioEngine::loadTrack(const std::string& filePath) {
+    if (m_initialized) {
+        ma_device_uninit(&m_device);
+        ma_decoder_uninit(&m_decoder);
+        m_initialized = false;
+    }
+
+    ma_result result = ma_decoder_init_file(filePath.c_str(), nullptr, &m_decoder);
     if (result != MA_SUCCESS) {
         std::cerr << "Failed to load audio file: " << filePath << std::endl;
         return false;
@@ -48,13 +86,61 @@ bool AudioEngine::initialize(const std::string& filePath) {
     }
 
     m_initialized = true;
+    m_isPaused = false;
     return true;
 }
 
 void AudioEngine::play() {
-    if (m_initialized) {
+    if (m_initialized && !m_isPaused) {
         ma_device_start(&m_device);
     }
+}
+
+void AudioEngine::togglePause() {
+    if (!m_initialized) return;
+    
+    if (m_isPaused) {
+        ma_device_start(&m_device);
+        m_isPaused = false;
+    } else {
+        ma_device_stop(&m_device);
+        m_isPaused = true;
+    }
+}
+
+void AudioEngine::nextTrack() {
+    if (m_playlist.empty()) return;
+    m_currentTrackIndex = (m_currentTrackIndex + 1) % m_playlist.size();
+    loadTrack(m_playlist[m_currentTrackIndex]);
+    if (!m_isPaused) play();
+}
+
+void AudioEngine::prevTrack() {
+    if (m_playlist.empty()) return;
+    m_currentTrackIndex = (m_currentTrackIndex - 1 + m_playlist.size()) % m_playlist.size();
+    loadTrack(m_playlist[m_currentTrackIndex]);
+    if (!m_isPaused) play();
+}
+
+void AudioEngine::seekForward(float seconds) {
+    if (!m_initialized) return;
+    
+    ma_uint64 cursor;
+    ma_decoder_get_cursor_in_pcm_frames(&m_decoder, &cursor);
+    
+    ma_uint64 framesToSeek = static_cast<ma_uint64>(seconds * m_decoder.outputSampleRate);
+    ma_decoder_seek_to_pcm_frame(&m_decoder, cursor + framesToSeek);
+}
+
+std::string AudioEngine::getCurrentTrackName() const {
+    if (m_currentTrackIndex >= 0 && m_currentTrackIndex < m_playlist.size()) {
+        return fs::path(m_playlist[m_currentTrackIndex]).filename().string();
+    }
+    return "No Track Loaded";
+}
+
+bool AudioEngine::isPlaying() const {
+    return m_initialized && !m_isPaused;
 }
 
 void AudioEngine::dataCallback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {

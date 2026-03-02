@@ -12,8 +12,19 @@ public:
     ~AudioEngine();
 
     bool initialize(const std::string& filePath);
+    bool loadDirectory(const std::string& dirPath);
+    
     void play();
     void update();
+
+    // Playback Controls
+    void togglePause();
+    void nextTrack();
+    void prevTrack();
+    void seekForward(float seconds);
+    
+    std::string getCurrentTrackName() const;
+    bool isPlaying() const;
 
     // Get the accumulated "energy" for each band
     float getSubBass() const { return m_subBassEnergy; }
@@ -36,10 +47,16 @@ public:
 private:
     static void dataCallback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);
     void processAudioData(const float* pFrames, ma_uint32 frameCount);
+    bool loadTrack(const std::string& filePath);
 
     ma_decoder m_decoder;
     ma_device m_device;
     bool m_initialized;
+    bool m_isPaused;
+
+    // Playlist
+    std::vector<std::string> m_playlist;
+    int m_currentTrackIndex;
 
     // FFT Setup
     static const int FFT_SIZE = 1024;

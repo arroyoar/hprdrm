@@ -16,7 +16,7 @@ bool firstMouse = true;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-void processInput(GLFWwindow *window) {
+void processInput(GLFWwindow *window, AudioEngine& audio) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
@@ -28,6 +28,67 @@ void processInput(GLFWwindow *window) {
         camera.ProcessKeyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
         camera.ProcessKeyboard(RIGHT, deltaTime);
+
+    // Audio controls (with simple debouncing)
+    static bool spacePressed = false;
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
+        if (!spacePressed) {
+            audio.togglePause();
+            spacePressed = true;
+        }
+    } else {
+        spacePressed = false;
+    }
+
+    static bool nPressed = false;
+    if (glfwGetKey(window, GLFW_KEY_N) == GLFW_PRESS) {
+        if (!nPressed) {
+            audio.nextTrack();
+            nPressed = true;
+        }
+    } else {
+        nPressed = false;
+    }
+
+    static bool pPressed = false;
+    if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS) {
+        if (!pPressed) {
+            audio.prevTrack();
+            pPressed = true;
+        }
+    } else {
+        pPressed = false;
+    }
+
+    static bool rightPressed = false;
+    if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
+        if (!rightPressed) {
+            audio.seekForward(5.0f); // Seek forward 5 seconds
+            rightPressed = true;
+        }
+    } else {
+        rightPressed = false;
+    }
+
+    // Camera Mode toggle (C key)
+    static bool cPressed = false;
+    if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
+        if (!cPressed) {
+            if (camera.Mode == MODE_MANUAL) {
+                camera.Mode = MODE_ORBIT;
+                std::cout << "Camera Mode: ORBIT" << std::endl;
+            } else if (camera.Mode == MODE_ORBIT) {
+                camera.Mode = MODE_SWEEP;
+                std::cout << "Camera Mode: SWEEP" << std::endl;
+            } else {
+                camera.Mode = MODE_MANUAL;
+                std::cout << "Camera Mode: MANUAL" << std::endl;
+            }
+            cPressed = true;
+        }
+    } else {
+        cPressed = false;
+    }
 }
 
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
@@ -80,14 +141,21 @@ int main() {
     Shader shader("assets/shaders/visualizer.vert", "assets/shaders/visualizer.frag");
 
     AudioEngine audio;
-    bool audioLoaded = audio.initialize("music.mp3");
+    
+    // First try to load a directory called "music"
+    bool audioLoaded = audio.loadDirectory("music");
+    if (!audioLoaded) audioLoaded = audio.loadDirectory("../music");
+    if (!audioLoaded) audioLoaded = audio.loadDirectory("../../music");
+    
+    // Fallback to the single music.mp3 file
+    if (!audioLoaded) audioLoaded = audio.initialize("music.mp3");
     if (!audioLoaded) audioLoaded = audio.initialize("../../music.mp3");
     if (!audioLoaded) audioLoaded = audio.initialize("../music.mp3");
     
     if (audioLoaded) {
         audio.play();
     } else {
-        std::cerr << "Warning: Could not load music.mp3. Visualizer will run without audio." << std::endl;
+        std::cerr << "Warning: Could not load music directory or music.mp3. Visualizer will run without audio." << std::endl;
     }
 
     // Cube vertices (36 vertices for 12 triangles)
@@ -146,14 +214,29 @@ int main() {
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glVertexAttribDivisor(1, 1); // Advance once per instance
 
+    std::string currentTrackName = "";
+
     // Main application loop
     while (!window.shouldClose()) {
         float currentFrame = static_cast<float>(glfwGetTime());
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
-        processInput(window.getHandle());
+        processInput(window.getHandle(), audio);
+        camera.Update(currentFrame, deltaTime);
         audio.update();
+
+        // Update Window Title with track info
+        std::string trackName = audio.getCurrentTrackName();
+        if (trackName != currentTrackName) {
+            currentTrackName = trackName;
+            std::string title = "3D Music Visualizer - " + currentTrackName;
+            if (!audio.isPlaying() && audioLoaded) title += " (Paused)";
+            glfwSetWindowTitle(window.getHandle(), title.c_str());
+        } else if (!audio.isPlaying() && audioLoaded) {
+            std::string title = "3D Music Visualizer - " + currentTrackName + " (Paused)";
+            glfwSetWindowTitle(window.getHandle(), title.c_str());
+        }
 
         glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

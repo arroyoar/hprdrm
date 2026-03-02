@@ -30,37 +30,37 @@ void main() {
     float heightMod = 0.0;
     
     // How many frames a band must be maxed out before it triggers the effect
-    float flashThreshold = 15.0; 
+    float baseFlashThreshold = 15.0; 
     
     // Spread 7 layers smoothly across the 100x100 grid (max radius ~150)
     if (dist < 15.0) { // Sub-Bass
         heightMod = min(uSubBass * 4.0, 45.0); 
         Color = vec3(0.9, 0.1, 0.1); 
-        if (uSubBassMaxDur > flashThreshold) Color = vec3(1.0, 1.0, 1.0); // Flash White!
+        if (uSubBassMaxDur > baseFlashThreshold * 3.0) Color = vec3(1.0, 1.0, 0.8); // Higher threshold, soft yellow flash
     } else if (dist < 35.0) { // Bass
         heightMod = min(uBass * 3.5, 35.0);
         Color = vec3(0.9, 0.5, 0.1); 
-        if (uBassMaxDur > flashThreshold) Color = vec3(1.0, 1.0, 1.0);
+        if (uBassMaxDur > baseFlashThreshold * 2.5) Color = vec3(1.0, 1.0, 0.9); // Higher threshold
     } else if (dist < 55.0) { // Low Mids
         heightMod = min(uLowMid * 3.0, 30.0);
         Color = vec3(0.7, 0.8, 0.1);  
-        if (uLowMidMaxDur > flashThreshold) Color = vec3(1.0, 1.0, 1.0);
+        if (uLowMidMaxDur > baseFlashThreshold) Color = vec3(1.0, 1.0, 1.0);
     } else if (dist < 75.0) { // Mids
         heightMod = min(uMid * 2.5, 25.0);
         Color = vec3(0.2, 0.9, 0.2);  
-        if (uMidMaxDur > flashThreshold) Color = vec3(1.0, 1.0, 1.0);
+        if (uMidMaxDur > baseFlashThreshold) Color = vec3(1.0, 1.0, 1.0);
     } else if (dist < 95.0) { // High Mids
         heightMod = min(uHighMid * 2.0, 20.0);
         Color = vec3(0.2, 0.8, 0.9);  
-        if (uHighMidMaxDur > flashThreshold) Color = vec3(1.0, 1.0, 1.0);
+        if (uHighMidMaxDur > baseFlashThreshold) Color = vec3(1.0, 1.0, 1.0);
     } else if (dist < 115.0) { // Presence
         heightMod = min(uPresence * 1.5, 15.0);
         Color = vec3(0.2, 0.3, 0.9); 
-        if (uPresenceMaxDur > flashThreshold) Color = vec3(1.0, 1.0, 1.0);
+        if (uPresenceMaxDur > baseFlashThreshold) Color = vec3(1.0, 1.0, 1.0);
     } else { // Treble
         heightMod = min(uTreble * 1.2, 10.0);
         Color = vec3(0.6, 0.1, 0.8); 
-        if (uTrebleMaxDur > flashThreshold) Color = vec3(1.0, 1.0, 1.0);
+        if (uTrebleMaxDur > baseFlashThreshold) Color = vec3(1.0, 1.0, 1.0);
     }
 
     // Taper off the height based on distance so the extreme edges are naturally flatter
