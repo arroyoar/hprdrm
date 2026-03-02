@@ -14,10 +14,19 @@ find_package(glad REQUIRED)
 find_package(glm REQUIRED)
 find_package(miniaudio REQUIRED)
 find_package(kissfft REQUIRED)
+find_package(imgui REQUIRED)
+find_package(portable-file-dialogs REQUIRED)
 find_package(GTest REQUIRED)
 
 # Setup executable
-add_executable(visualizer src/main.cpp src/Window.cpp src/AudioEngine.cpp src/Shader.cpp)
+add_executable(visualizer 
+    src/main.cpp 
+    src/Window.cpp 
+    src/AudioEngine.cpp 
+    src/Shader.cpp
+    src/imgui_backends/imgui_impl_glfw.cpp
+    src/imgui_backends/imgui_impl_opengl3.cpp
+)
 
 # Copy assets to build directory
 file(COPY assets DESTINATION ${CMAKE_BINARY_DIR})
@@ -29,7 +38,10 @@ target_link_libraries(visualizer PRIVATE
     glm::glm
     miniaudio::miniaudio
     kissfft::kissfft
+    imgui::imgui
+    portable-file-dialogs::portable-file-dialogs
 )
+target_include_directories(visualizer PRIVATE src src/imgui_backends)
 
 # Setup Testing
 enable_testing()
