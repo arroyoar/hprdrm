@@ -7,6 +7,12 @@
 #include "Camera.h"
 #include <glm/gtc/matrix_transform.hpp>
 
+// ImGui and Portable File Dialogs
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
+#include <portable-file-dialogs.h>
+
 // Camera setup - Pull the camera back and up to see the full 50x50 grid
 Camera camera(glm::vec3(0.0f, 60.0f, 90.0f));
 float lastX = 1280.0f / 2.0;
@@ -110,7 +116,7 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
     lastY = ypos;
 
     // Only move camera if right mouse button is pressed to avoid locking mouse constantly
-    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS && !ImGui::GetIO().WantCaptureMouse) {
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         camera.ProcessMouseMovement(xoffset, yoffset);
     } else {
@@ -140,6 +146,16 @@ int main(int argc, char* argv[]) {
     
     // Enable depth testing
     glEnable(GL_DEPTH_TEST);
+
+    // Setup ImGui Context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    ImGui::StyleColorsDark();
+    
+    // Setup Platform/Renderer backends
+    ImGui_ImplGlfw_InitForOpenGL(window.getHandle(), true);
+    ImGui_ImplOpenGL3_Init("#version 330 core");
 
     Shader shader("assets/shaders/visualizer.vert", "assets/shaders/visualizer.frag");
 
@@ -193,23 +209,27 @@ int main(int argc, char* argv[]) {
         -0.5f,  0.5f, -0.5f,  0.5f,  0.5f, -0.5f,  0.5f,  0.5f,  0.5f,  0.5f,  0.5f,  0.5f, -0.5f,  0.5f,  0.5f, -0.5f,  0.5f, -0.5f
     };
 
-    // Generate grid offsets
+    // Generate 3D Voxel Grid offsets
     std::vector<glm::vec3> translations;
-    int gridSize = 100; // Increased to 100x100 = 10,000 cubes for a much wider field
-    float offset = 2.5f; // Increased spacing between cubes
-    for (int z = -gridSize / 2; z < gridSize / 2; z++) {
-        for (int x = -gridSize / 2; x < gridSize / 2; x++) {
-            // Stagger every other row on the X axis so we can see "through" the grid better
-            float rowOffset = (z % 2 == 0) ? 0.0f : (offset / 2.0f);
-            
-            float xPos = x * offset + rowOffset;
-            float zPos = z * (offset * 0.866f); // Pull rows closer for hexagonal pattern
-            
-            // Add a slight curve-down effect so outer layers sit lower, exposing the center
-            float distFromCenter = std::sqrt(xPos*xPos + zPos*zPos);
-            float yPos = distFromCenter * -0.1f; 
+    int gridSize = 100; // 100x100 = 10,000 horizontal positions
+    int stackHeight = 36; // We create 36 vertical layers per position -> 360,000 cubes!
+    float offset = 2.5f; // Horizontal spacing between stacks
+    
+    translations.reserve(gridSize * gridSize * stackHeight);
 
-            translations.push_back(glm::vec3(xPos, yPos, zPos));
+    for (int y = 0; y < stackHeight; y++) {
+        for (int z = -gridSize / 2; z < gridSize / 2; z++) {
+            for (int x = -gridSize / 2; x < gridSize / 2; x++) {
+                // Stagger every other row on the X axis so we can see "through" the grid better
+                float rowOffset = (z % 2 == 0) ? 0.0f : (offset / 2.0f);
+                
+                float xPos = x * offset + rowOffset;
+                float zPos = z * (offset * 0.866f); // Pull rows closer for hexagonal pattern
+                
+                // We pass the layer index (y) directly into the Y component. 
+                // The vertex shader will use this to determine visibility and color!
+                translations.push_back(glm::vec3(xPos, (float)y, zPos));
+            }
         }
     }
 
@@ -251,6 +271,11 @@ int main(int argc, char* argv[]) {
         camera.Update(currentFrame, deltaTime);
         audio.update();
 
+        // Start the ImGui frame
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
         // Update Window Title with track info
         std::string trackName = audio.getCurrentTrackName();
         if (trackName != currentTrackName) {
@@ -262,6 +287,54 @@ int main(int argc, char* argv[]) {
             std::string title = "3D Music Visualizer - " + currentTrackName + " (Paused)";
             glfwSetWindowTitle(window.getHandle(), title.c_str());
         }
+
+        // Render UI Window
+        ImGui::Begin("Visualizer Controls");
+        
+        ImGui::Text("Now Playing: %s", currentTrackName.c_str());
+        ImGui::Separator();
+
+        // Playback Controls
+        if (ImGui::Button(audio.isPlaying() ? "Pause" : "Play")) {
+            audio.togglePause();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Prev")) {
+            audio.prevTrack();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Next")) {
+            audio.nextTrack();
+        }
+        
+        ImGui::Separator();
+        
+        // Playlist Selection
+        if (ImGui::Button("Load Music Directory...")) {
+            // Open native directory selection dialog
+            auto dir = pfd::select_folder("Select Music Directory", ".").result();
+            if (!dir.empty()) {
+                audioLoaded = audio.loadDirectory(dir);
+                if (audioLoaded) {
+                    audio.play();
+                } else {
+                    std::cerr << "No valid audio files found in directory." << std::endl;
+                }
+            }
+        }
+
+        ImGui::Separator();
+
+        // Camera Controls
+        ImGui::Text("Camera Mode:");
+        if (ImGui::RadioButton("Manual (WASD + Mouse)", camera.Mode == MODE_MANUAL)) { camera.Mode = MODE_MANUAL; }
+        if (ImGui::RadioButton("Orbit", camera.Mode == MODE_ORBIT)) { camera.Mode = MODE_ORBIT; }
+        if (ImGui::RadioButton("Sweep", camera.Mode == MODE_SWEEP)) { camera.Mode = MODE_SWEEP; }
+
+        ImGui::End();
+
+        // Rendering
+        ImGui::Render();
 
         glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -293,9 +366,17 @@ int main(int argc, char* argv[]) {
         glDrawArraysInstanced(GL_TRIANGLES, 0, 36, translations.size());
         glBindVertexArray(0);
 
+        // Draw UI
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
         window.swapBuffers();
         window.pollEvents();
     }
+
+    // Cleanup ImGui
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
 
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
