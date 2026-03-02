@@ -38,6 +38,7 @@ This project is a 3D music visualizer written in C++, using OpenGL, GLFW, GLM, m
 *   **Playlist Support:** Added the ability to dynamically load music from a directory using a native file explorer powered by **portable-file-dialogs**.
 *   **Cinematic Camera:** Added pre-determined automated camera movements (sweeps, tracking, orbiting) toggleable via the UI.
 *   **Visual Refinement:** Refined max-duration flash tracking for smoother, softer highlights on sustained bass notes.
+*   **3D Voxel Stacks:** Converted the flat stretched grid into a massive 360,000-cube instanced 3D volume, utilizing shader-based invisibility toggling and intensity gradients to create distinct, glowing equalizer stacks.
 
 ## Phase 7: Advanced Architecture (Next)
 *   To support advanced features (Depth of Field, Bloom/Sparks, Distortion, Video Texturing), design the renderer with a **Framebuffer Object (FBO)** architecture from the start.
